@@ -1,0 +1,112 @@
+from google.colab import drive
+drive.mount('/content/drive')
+
+import numpy as np
+import math
+import nltk
+nltk.download('stopwords')
+nltk.download('punkt')
+nltk.download('wordnet')
+import os
+import string
+import logging
+import re
+from collections import defaultdict, Counter
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+
+# Read documents from uploaded files
+file_paths = ["/content/drive/MyDrive/info_retrieval_lab/Week3"]
+
+# Load documents into a list
+docs = []
+for file_path in file_paths:
+    if os.path.isdir(file_path):
+        for filename in os.listdir(file_path):
+            filepath = os.path.join(file_path, filename)
+            # Check if it's a file and then read
+            if os.path.isfile(filepath):
+                with open(filepath, 'r', encoding='utf-8') as file:
+                    docs.append(file.read())
+    # If it's not a directory, try reading it as a file
+    elif os.path.isfile(file_path):
+        with open(file_path, 'r', encoding='utf-8') as file:
+            docs.append(file.read())
+
+# Defining the queries manually
+queries = [
+    "technical issues",
+    "tracking number",
+    "customer service"
+]
+
+# Function to lowercase and tokenize text
+def tokenize(text):
+    return text.lower().split()
+
+ # Convert to lowercase
+    text = text.lower()
+    # Removing special characters and punctuation
+    text = re.sub(r"[^a-zA-Z0-9\s]", "", text)
+    # Removing digit
+    text = re.sub(r"\d+", "", text)
+
+# Tokenize documents and queries
+tokenized_docs = [tokenize(doc) for doc in docs]
+tokenized_queries = [tokenize(query) for query in queries]
+
+# Create a vocabulary from the tokenized documents
+vocab = list(set(term for doc in tokenized_docs for term in doc))
+
+
+print(tokenized_docs)
+print(tokenized_queries)
+print(vocab)
+
+# Function to calculate term frequency (TF)
+def term_frequency(term, document):
+    return document.count(term) / len(document)
+
+# Function to calculate inverse document frequency (IDF)
+def inverse_document_frequency(term, all_documents):
+    num_docs_containing_term = sum(1 for doc in all_documents if term in doc)
+    return math.log(len(all_documents) / (1 + num_docs_containing_term))
+
+# Compute TF-IDF for a document
+def compute_tfidf(document, all_documents, vocab):
+    tfidf_vector = []
+    for term in vocab:
+        tf = term_frequency(term, document)
+        idf = inverse_document_frequency(term, all_documents)
+        tfidf_vector.append(tf * idf)
+    return np.array(tfidf_vector)
+
+# Compute cosine similarity between two vectors
+def cosine_similarity(vec1, vec2):
+    dot_product = np.dot(vec1, vec2)
+    norm_vec1 = np.linalg.norm(vec1)
+    norm_vec2 = np.linalg.norm(vec2)
+    return dot_product / (norm_vec1 * norm_vec2)
+
+# Calculate TF-IDF vectors for documents and queries
+doc_tfidf_vectors = [compute_tfidf(doc, tokenized_docs, vocab) for doc in tokenized_docs]
+query_tfidf_vectors = [compute_tfidf(query, tokenized_docs, vocab) for query in tokenized_queries]
+
+# Open the file to write the results
+with open("Shirish.txt", "w") as result_file:
+    # Calculate cosine similarities and rank top 3 documents for each query
+    for i, query_vector in enumerate(query_tfidf_vectors):
+        similarities = [cosine_similarity(query_vector, doc_vector) for doc_vector in doc_tfidf_vectors]
+
+        # Rank documents by similarity score
+        ranked_docs = sorted(enumerate(similarities), key=lambda x: x[1], reverse=True)[:3]  # Top 3
+
+        # Prepare the result string
+        result_str = f"\nTop 3 results for query '{queries[i]}':\n"
+        for rank, (doc_index, score) in enumerate(ranked_docs, 1):
+            result_str += f"Rank {rank}: Document {doc_index + 1} with score {score:.4f}\n"
+
+        # Print to console and write to file
+        print(result_str)
+        result_file.write(result_str)
